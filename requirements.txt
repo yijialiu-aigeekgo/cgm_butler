@@ -9,6 +9,7 @@ flask-cors>=3.0.0          # CORS Support
 schedule>=1.1.0            # Pattern Identification Scheduler
 requests>=2.26.0           # HTTP Client for Tavus API
 openai>=1.0.0              # GPT-4o Chat Integration
+python-dotenv>=0.19.0      # Load environment variables from .env files
 
 # 内置库 (无需安装)
 # - sqlite3

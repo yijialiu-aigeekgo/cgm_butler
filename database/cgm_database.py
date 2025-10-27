@@ -297,6 +297,21 @@ class CGMDatabase:
         row = cursor.fetchone()
         return row['tir'] if row and row['tir'] else 0.0
     
+    def calculate_time_in_range(self, user_id: str, hours: int = 24) -> float:
+        """
+        计算最近 N 小时内的 Time In Range 百分比
+        
+        Args:
+            user_id: 用户ID
+            hours: 时间范围小时数，默认24
+        
+        Returns:
+            在目标范围内的时间百分比 (0-100)
+        """
+        end_time = datetime.now().isoformat()
+        start_time = (datetime.now() - timedelta(hours=hours)).isoformat()
+        return self.get_time_in_range(user_id, start_time=start_time, end_time=end_time)
+    
     # ============================================================
     # Pattern-Action 相关操作
     # ============================================================

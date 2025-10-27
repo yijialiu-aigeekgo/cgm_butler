@@ -9,9 +9,9 @@ export default defineConfig({
     host: true,
   },
   define: {
-    'import.meta.env.VITE_TAVUS_API_KEY': JSON.stringify(process.env.VITE_TAVUS_API_KEY || '2baf6b72f7dc4c728132e63193c1dac7'),
-    'import.meta.env.VITE_REPLICA_ID': JSON.stringify(process.env.VITE_REPLICA_ID || 'rfe12d8b9597'),
-    'import.meta.env.VITE_PERSONA_ID': JSON.stringify(process.env.VITE_PERSONA_ID || 'p4e7a065501a'),
+    'import.meta.env.VITE_TAVUS_API_KEY': JSON.stringify(process.env.VITE_TAVUS_API_KEY || '9b6138127c1946fb98a5ad3b5c86300b'),
+    'import.meta.env.VITE_REPLICA_ID': JSON.stringify(process.env.VITE_REPLICA_ID || 'r9fa0878977a'),
+    'import.meta.env.VITE_PERSONA_ID': JSON.stringify(process.env.VITE_PERSONA_ID || 'p176d7357a2d'),
     'import.meta.env.VITE_BACKEND_URL': JSON.stringify(process.env.VITE_BACKEND_URL || 'http://localhost:5000'),
   },
 })

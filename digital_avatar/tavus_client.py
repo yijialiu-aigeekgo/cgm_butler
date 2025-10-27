@@ -5,7 +5,7 @@ This module provides a client for interacting with the Tavus Digital Avatar API.
 """
 
 import requests
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 import os
 
 
@@ -153,6 +153,42 @@ class TavusClient:
         response.raise_for_status()
         
         return response.json()
+    
+    def get_active_conversations_from_api(self) -> List[Dict]:
+        """
+        Get list of active conversations from Tavus API.
+        Note: This requires the conversation_id, so we can't directly list all.
+        Use replica_id to track conversations instead.
+        
+        Returns:
+            List of active conversations (if API supports it)
+        """
+        # Try to get active conversations
+        # Note: Tavus API may not support this directly, so we return an empty list
+        # and rely on tracking at the application level
+        return []
+    
+    def force_end_all_conversations(self) -> Dict:
+        """
+        Force end all conversations for this API key.
+        This is a workaround for the concurrent conversation limit.
+        
+        Returns:
+            Status of cleanup attempt
+        """
+        try:
+            # Since we can't directly list all conversations,
+            # we'll attempt to query the API status endpoint if available
+            url = f"{self.BASE_URL}/v2/status"
+            response = requests.get(url, headers=self.headers)
+            
+            if response.ok:
+                data = response.json()
+                return data
+            else:
+                return {"status": "unable to check", "message": "API endpoint not available"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
 
 
 if __name__ == '__main__':

@@ -5,9 +5,22 @@ Configuration for Digital Avatar Module
 import os
 from typing import Optional
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    # Load from project root directory
+    import sys
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_file = os.path.join(project_root, '.env')
+    if os.path.exists(env_file):
+        load_dotenv(env_file)
+except ImportError:
+    # python-dotenv not installed, will use environment variables directly
+    pass
+
 # API Keys - 仅从环境变量读取，不要硬编码敏感信息！
 TAVUS_API_KEY = os.getenv('TAVUS_API_KEY', '')
-TAVUS_PERSONA_ID = os.getenv('TAVUS_PERSONA_ID', 'p4e7a065501a')
+TAVUS_PERSONA_ID = os.getenv('TAVUS_PERSONA_ID', 'p176d7357a2d')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 
 
@@ -85,13 +98,14 @@ ENV_TEMPLATE = """
 # Copy this to your .env file and fill in the values
 
 # Tavus API Key (required)
-TAVUS_API_KEY=your-tavus-api-key-here
+TAVUS_API_KEY=9b6138127c1946fb98a5ad3b5c86300b
 
-# Tavus Persona ID (optional, defaults to p4e7a065501a)
-TAVUS_PERSONA_ID=p4e7a065501a
+# Tavus Persona ID (optional, defaults to p176d7357a2d)
+TAVUS_PERSONA_ID=p176d7357a2d
 
 # OpenAI API Key (required for GPT features)
-OPENAI_API_KEY=your-openai-api-key-here
+# 获取方法: https://platform.openai.com/account/api-keys
+OPENAI_API_KEY=sk-your-openai-api-key-here
 
 # Database Path (optional, uses default if not set)
 # CGM_DB_PATH=/path/to/cgm_butler.db

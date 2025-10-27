@@ -190,6 +190,23 @@ Remember: You are Olivia, an elegant and attentive health butler. Be warm, suppo
       setLoading(true);
       setError('');
       
+      // 先清理旧的对话以解决并发限制
+      console.log('🧹 Cleaning up old conversations...');
+      try {
+        const cleanupRes = await fetch('http://localhost:5000/api/avatar/cleanup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        
+        if (cleanupRes.ok) {
+          const cleanupData = await cleanupRes.json();
+          console.log(`✅ Cleaned up ${cleanupData.ended_count} old conversation(s)`);
+        }
+      } catch (cleanupErr) {
+        console.warn('⚠️ Cleanup warning (non-critical):', cleanupErr);
+      }
+      
       // 通过环境变量获取（由 vite.config.ts 提供默认值）
       const apiKey = import.meta.env.VITE_TAVUS_API_KEY;
       const personaId = import.meta.env.VITE_PERSONA_ID;
@@ -229,6 +246,31 @@ Remember: You are Olivia, an elegant and attentive health butler. Be warm, suppo
         setConversationUrl(data.conversation_url);
         console.log('✅ Conversation created successfully');
         console.log('Conversation URL:', data.conversation_url);
+        
+        // 保存对话ID到 localStorage 便于后续清理
+        try {
+          const url = new URL(data.conversation_url);
+          const conversationId = url.searchParams.get('c') || data.conversation_url.split('/').pop();
+          
+          // 保存到 localStorage
+          localStorage.setItem('lastTavusConversationUrl', data.conversation_url);
+          localStorage.setItem('lastTavusConversationId', conversationId);
+          
+          // 也发送到后端保存
+          await fetch('http://localhost:5000/api/avatar/save-conversation-id', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              conversation_url: data.conversation_url,
+              conversation_id: conversationId,
+              created_at: new Date().toISOString()
+            })
+          }).catch(err => console.warn('⚠️ Failed to save conversation ID to backend:', err));
+          
+          console.log('💾 Conversation URL saved for cleanup');
+        } catch (saveErr) {
+          console.warn('⚠️ Failed to save conversation ID:', saveErr);
+        }
       } else {
         throw new Error('No conversation URL in response');
       }

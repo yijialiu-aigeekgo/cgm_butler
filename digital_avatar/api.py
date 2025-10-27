@@ -201,6 +201,190 @@ def end_conversation(conversation_id: str):
         }), 500
 
 
+@avatar_bp.route('/save-conversation-id', methods=['POST'])
+def save_conversation_id():
+    """
+    保存 Tavus 对话 URL 和 ID 便于后续清理
+    
+    Request body:
+        {
+            "conversation_url": "https://...",
+            "conversation_id": "conv_xxxxx",
+            "created_at": "2025-10-27T..."
+        }
+    
+    Returns:
+        {
+            "success": true,
+            "message": "Conversation ID saved"
+        }
+    """
+    try:
+        import json
+        from pathlib import Path
+        from datetime import datetime
+        
+        data = request.get_json() or {}
+        conversation_url = data.get('conversation_url')
+        conversation_id = data.get('conversation_id')
+        created_at = data.get('created_at', datetime.now().isoformat())
+        
+        if not conversation_url or not conversation_id:
+            return jsonify({
+                "success": False,
+                "message": "conversation_url and conversation_id are required"
+            }), 400
+        
+        # 保存到 conversations_history.json
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        history_file = os.path.join(project_root, 'conversations_history.json')
+        
+        # 读取现有记录
+        history = []
+        if os.path.exists(history_file):
+            try:
+                with open(history_file, 'r', encoding='utf-8') as f:
+                    history = json.load(f)
+            except:
+                history = []
+        
+        # 添加新记录
+        history.append({
+            "conversation_id": conversation_id,
+            "conversation_url": conversation_url,
+            "created_at": created_at
+        })
+        
+        # 保持最近 10 条记录
+        history = history[-10:]
+        
+        # 写入文件
+        with open(history_file, 'w', encoding='utf-8') as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({
+            "success": True,
+            "message": "Conversation ID saved",
+            "file": history_file
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+
+@avatar_bp.route('/conversation-history', methods=['GET'])
+def get_conversation_history():
+    """
+    获取已保存的对话历史
+    
+    Returns:
+        {
+            "success": true,
+            "conversations": [
+                {
+                    "conversation_id": "conv_xxxxx",
+                    "conversation_url": "https://...",
+                    "created_at": "2025-10-27T..."
+                }
+            ]
+        }
+    """
+    try:
+        import json
+        
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        history_file = os.path.join(project_root, 'conversations_history.json')
+        
+        history = []
+        if os.path.exists(history_file):
+            try:
+                with open(history_file, 'r', encoding='utf-8') as f:
+                    history = json.load(f)
+            except:
+                history = []
+        
+        return jsonify({
+            "success": True,
+            "conversations": history
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+
+@avatar_bp.route('/cleanup', methods=['POST'])
+def cleanup_old_conversations():
+    """
+    清理之前的 Tavus 对话，解决并发限制问题
+    
+    Request body (optional):
+        {
+            "conversation_id": "specific_id_to_end"  // 可选，指定要结束的对话ID
+        }
+    
+    Returns:
+        {
+            "success": true,
+            "message": "Conversation cleaned up",
+            "ended_count": 1
+        }
+    """
+    try:
+        if not conversation_manager:
+            return jsonify({
+                "success": False,
+                "message": "Tavus API not configured"
+            }), 503
+        
+        data = request.get_json() or {}
+        conversation_id = data.get('conversation_id')
+        
+        if conversation_id:
+            # 结束指定的对话
+            try:
+                result = conversation_manager.end_conversation(conversation_id)
+                return jsonify({
+                    "success": True,
+                    "message": "Conversation ended",
+                    "ended_count": 1,
+                    "details": result
+                })
+            except Exception as e:
+                return jsonify({
+                    "success": False,
+                    "message": f"Failed to end conversation: {str(e)}"
+                }), 400
+        else:
+            # 获取活跃对话列表
+            active_convs = conversation_manager.get_active_conversations()
+            ended_count = 0
+            
+            for conv in active_convs:
+                try:
+                    conversation_manager.end_conversation(conv.get('conversation_id'))
+                    ended_count += 1
+                except:
+                    pass
+            
+            return jsonify({
+                "success": True,
+                "message": f"Cleaned up {ended_count} conversation(s)",
+                "ended_count": ended_count
+            })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+
 @avatar_bp.route('/active', methods=['GET'])
 def get_active_conversations():
     """
