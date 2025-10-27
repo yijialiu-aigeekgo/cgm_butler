@@ -29,20 +29,35 @@ def init_avatar_api(tavus_api_key: str = None, persona_id: str = None, openai_ap
     Initialize the avatar API.
     
     Args:
-        tavus_api_key: Tavus API key
+        tavus_api_key: Tavus API key (optional, video avatar won't work without it)
         persona_id: Persona ID
         openai_api_key: OpenAI API key
     """
     global conversation_manager, gpt_chat_manager
     
-    # Tavus conversation manager (for video avatar)
-    conversation_manager = ConversationManager(
-        tavus_api_key=tavus_api_key,
-        persona_id=persona_id or AvatarConfig.TAVUS_PERSONA_ID
-    )
+    # Tavus conversation manager (for video avatar) - optional, will fail gracefully
+    try:
+        if tavus_api_key or os.getenv('TAVUS_API_KEY'):
+            conversation_manager = ConversationManager(
+                tavus_api_key=tavus_api_key,
+                persona_id=persona_id or AvatarConfig.TAVUS_PERSONA_ID
+            )
+            print("✅ Tavus API initialized successfully (video avatar available)")
+        else:
+            print("⚠️  Tavus API key not found (video avatar will be unavailable)")
+            conversation_manager = None
+    except Exception as e:
+        print(f"⚠️  Failed to initialize Tavus API: {e}")
+        print("   Video avatar will be unavailable, but text chat will work")
+        conversation_manager = None
     
-    # GPT chat manager (for text chat)
-    gpt_chat_manager = GPTChatManager(api_key=openai_api_key)
+    # GPT chat manager (for text chat) - always initialize
+    try:
+        gpt_chat_manager = GPTChatManager(api_key=openai_api_key)
+        print("✅ GPT-4o chat initialized successfully (text chat available)")
+    except Exception as e:
+        print(f"⚠️  Failed to initialize GPT chat: {e}")
+        gpt_chat_manager = None
 
 
 @avatar_bp.route('/start', methods=['POST'])
@@ -67,6 +82,12 @@ def start_conversation():
         }
     """
     try:
+        if not conversation_manager:
+            return jsonify({
+                "success": False,
+                "message": "Tavus API not configured. Video avatar unavailable. Use GPT chat instead."
+            }), 503
+        
         data = request.get_json()
         user_id = data.get('user_id')
         config = data.get('config')
@@ -108,6 +129,12 @@ def send_message():
         }
     """
     try:
+        if not conversation_manager:
+            return jsonify({
+                "success": False,
+                "message": "Tavus API not configured. Use GPT chat instead."
+            }), 503
+        
         data = request.get_json()
         conversation_id = data.get('conversation_id')
         message = data.get('message')
