@@ -5,33 +5,38 @@ CGM Butler 数据库工具类
 提供便捷的数据库操作接口
 """
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Tuple
 import sys
 import io
+import os
 
 # 设置 Windows 控制台输出编码
 if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 
+DEFAULT_DB_PATH = os.getenv('CGM_DB_PATH', 'cgm_butler.db')
+
+
 class CGMDatabase:
     """CGM Butler 数据库操作类"""
     
-    def __init__(self, db_path: str = 'cgm_butler.db'):
+    def __init__(self, db_path: Optional[str] = None):
         """
         初始化数据库连接
         
         Args:
             db_path: 数据库文件路径
         """
-        self.db_path = db_path
+        self.db_path = db_path or DEFAULT_DB_PATH
         self.conn = None
     
     def connect(self):
         """建立数据库连接"""
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row  # 使查询结果可以通过列名访问
+        self._ensure_activity_logs_table()
         return self.conn
     
     def close(self):
@@ -48,6 +53,52 @@ class CGMDatabase:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """上下文管理器出口"""
         self.close()
+
+    # ============================================================
+    # 日志记录辅助
+    # ============================================================
+
+    def _ensure_activity_logs_table(self):
+        """创建活动日志表(如不存在)"""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                category TEXT NOT NULL,
+                title TEXT NOT NULL,
+                note TEXT,
+                timestamp_utc TEXT NOT NULL,
+                day_utc TEXT NOT NULL,
+                minutes_of_day_utc INTEGER NOT NULL,
+                medication_name TEXT,
+                dose TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_activity_logs_user_day
+            ON activity_logs (user_id, day_utc, timestamp_utc DESC)
+            """
+        )
+        self.conn.commit()
+
+    @staticmethod
+    def _normalise_timestamp_utc(timestamp_str: str) -> Tuple[str, str, int]:
+        """将任意 ISO8601 字符串转换为标准 UTC 字段"""
+        if not timestamp_str:
+            raise ValueError("timestamp is required")
+
+        cleaned = timestamp_str.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(cleaned)
+        dt_utc = dt.astimezone(timezone.utc)
+        timestamp_utc = dt_utc.isoformat().replace("+00:00", "Z")
+        day = dt_utc.date().isoformat()
+        minutes = dt_utc.hour * 60 + dt_utc.minute
+        return timestamp_utc, day, minutes
     
     # ============================================================
     # 用户相关操作
@@ -195,6 +246,97 @@ class CGMDatabase:
             query += ' LIMIT ?'
             params.append(limit)
         
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    # ============================================================
+    # 活动日志相关操作
+    # ============================================================
+
+    def add_activity_log(
+        self,
+        user_id: str,
+        *,
+        category: str,
+        title: str,
+        timestamp_utc: str,
+        note: Optional[str] = None,
+        medication_name: Optional[str] = None,
+        dose: Optional[str] = None,
+    ) -> Dict:
+        """添加一条活动日志并返回创建的记录"""
+
+        if category not in {"food", "lifestyle", "medication"}:
+            raise ValueError("Invalid category")
+
+        normalised_timestamp, day_utc, minutes = self._normalise_timestamp_utc(timestamp_utc)
+
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO activity_logs (
+                user_id,
+                category,
+                title,
+                note,
+                timestamp_utc,
+                day_utc,
+                minutes_of_day_utc,
+                medication_name,
+                dose
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                category,
+                title,
+                note,
+                normalised_timestamp,
+                day_utc,
+                minutes,
+                medication_name,
+                dose,
+            ),
+        )
+        self.conn.commit()
+        inserted_id = cursor.lastrowid
+        return self.get_activity_log_by_id(inserted_id)
+
+    def get_activity_log_by_id(self, log_id: int) -> Dict:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM activity_logs WHERE id = ?", (log_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else {}
+
+    def get_activity_logs(
+        self,
+        user_id: str,
+        *,
+        start_day: Optional[str] = None,
+        end_day: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[Dict]:
+        """按用户获取活动日志，按时间倒序"""
+
+        query = "SELECT * FROM activity_logs WHERE user_id = ?"
+        params: List = [user_id]
+
+        if start_day:
+            query += " AND day_utc >= ?"
+            params.append(start_day)
+
+        if end_day:
+            query += " AND day_utc <= ?"
+            params.append(end_day)
+
+        query += " ORDER BY timestamp_utc DESC"
+
+        if limit:
+            query += " LIMIT ?"
+            params.append(limit)
+
+        cursor = self.conn.cursor()
         cursor.execute(query, params)
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
@@ -669,4 +811,3 @@ def example_usage():
 
 if __name__ == '__main__':
     example_usage()
-

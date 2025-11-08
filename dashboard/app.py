@@ -5,7 +5,7 @@ CGM Butler Web Dashboard
 实时查看数据库数据的 Web 界面
 """
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 import sys
 import os
 from flask_cors import CORS
@@ -23,8 +23,11 @@ CORS(app)
 init_avatar_api()
 app.register_blueprint(avatar_bp)
 
-# 数据库路径
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'cgm_butler.db')
+# 数据库路径(可通过 CGM_DB_PATH 覆盖)
+DB_PATH = os.getenv(
+    'CGM_DB_PATH',
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'cgm_butler.db'),
+)
 
 
 @app.route('/')
@@ -132,6 +135,55 @@ def get_actions_by_category(category):
     with CGMDatabase(DB_PATH) as db:
         actions = db.get_pattern_actions(category=category)
         return jsonify(actions)
+
+
+@app.route('/api/activity-logs/<user_id>', methods=['GET'])
+def list_activity_logs(user_id):
+    """获取指定用户的活动日志"""
+    start_day = request.args.get('start')
+    end_day = request.args.get('end')
+    limit = request.args.get('limit', type=int)
+
+    with CGMDatabase(DB_PATH) as db:
+        logs = db.get_activity_logs(user_id, start_day=start_day, end_day=end_day, limit=limit)
+        return jsonify(logs)
+
+
+@app.route('/api/activity-logs', methods=['POST'])
+def create_activity_log():
+    """创建活动日志"""
+    payload = request.get_json(silent=True) or {}
+    user_id = payload.get('userId') or payload.get('user_id')
+    category = payload.get('category')
+    title = payload.get('title')
+    timestamp_utc = payload.get('timestampUtc') or payload.get('timestamp_utc')
+    note = payload.get('note')
+    medication_name = payload.get('medicationName') or payload.get('medication_name')
+    dose = payload.get('dose')
+
+    if not user_id:
+        return jsonify({'error': 'userId is required'}), 400
+    if not category or category not in {'food', 'lifestyle', 'medication'}:
+        return jsonify({'error': 'category must be one of food, lifestyle, medication'}), 400
+    if not title:
+        return jsonify({'error': 'title is required'}), 400
+    if not timestamp_utc:
+        return jsonify({'error': 'timestampUtc is required'}), 400
+
+    try:
+        with CGMDatabase(DB_PATH) as db:
+            created = db.add_activity_log(
+                user_id,
+                category=category,
+                title=title,
+                timestamp_utc=timestamp_utc,
+                note=note,
+                medication_name=medication_name,
+                dose=dose,
+            )
+            return jsonify(created), 201
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
 
 
 @app.route('/api/daily_summary/<user_id>/<date>')
@@ -350,4 +402,3 @@ if __name__ == '__main__':
     print("="*60 + "\n")
     
     app.run(debug=True, host='0.0.0.0', port=5000)
-
