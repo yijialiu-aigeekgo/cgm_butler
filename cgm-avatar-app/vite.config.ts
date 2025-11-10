@@ -7,6 +7,14 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    // 代理配置：将 /intake 请求代理到 Minerva 后端，绕过 CORS
+    proxy: {
+      '/intake': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   },
   define: {
     'import.meta.env.VITE_TAVUS_API_KEY': JSON.stringify(process.env.VITE_TAVUS_API_KEY || '9b6138127c1946fb98a5ad3b5c86300b'),
