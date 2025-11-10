@@ -9,11 +9,48 @@ Write-Host ""
 
 # Check Python
 Write-Host "Checking Python..." -ForegroundColor Yellow
+
+# Try multiple possible Python paths
+$pythonPaths = @(
+    "C:\Python313",
+    "C:\Python312",
+    "C:\Python311",
+    "C:\Python310",
+    "$env:LOCALAPPDATA\Programs\Python\Python313",
+    "$env:LOCALAPPDATA\Programs\Python\Python312",
+    "$env:LOCALAPPDATA\Programs\Python\Python311"
+)
+
+$pythonExe = "python"
+$pythonFound = $false
+
+# First try system python
 $pythonVersion = python --version 2>&1
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "  [OK] Python: $pythonVersion" -ForegroundColor Green
+    $pythonFound = $true
+    Write-Host "  [OK] Python found in PATH: $pythonVersion" -ForegroundColor Green
 } else {
+    # Try to find Python in common installation directories
+    foreach ($path in $pythonPaths) {
+        if (Test-Path "$path\python.exe") {
+            $pythonExe = "$path\python.exe"
+            $env:Path = "$path;$env:Path"
+            $pythonVersion = & $pythonExe --version 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $pythonFound = $true
+                Write-Host "  [OK] Python found at $path : $pythonVersion" -ForegroundColor Green
+                break
+            }
+        }
+    }
+}
+
+if (-not $pythonFound) {
     Write-Host "  [ERROR] Python not found! Please install Python first" -ForegroundColor Red
+    Write-Host "  Searched locations:" -ForegroundColor Yellow
+    foreach ($path in $pythonPaths) {
+        Write-Host "    - $path" -ForegroundColor Gray
+    }
     exit 1
 }
 
@@ -53,7 +90,7 @@ Write-Host "Starting service 1/3: Flask Dashboard (port 5000)..." -ForegroundCol
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
-    "cd 'D:\cgm butler\dashboard'; Write-Host 'Flask Dashboard starting...' -ForegroundColor Green; python app.py"
+    "cd 'D:\cgm butler\dashboard'; Write-Host 'Flask Dashboard starting...' -ForegroundColor Green; & '$pythonExe' app.py"
 ) -WindowStyle Normal
 
 Start-Sleep -Seconds 2
@@ -63,7 +100,7 @@ Write-Host "Starting service 2/3: Minerva Backend (port 8000)..." -ForegroundCol
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
-    "cd 'D:\cgm butler\minerva'; Write-Host 'Minerva Backend starting...' -ForegroundColor Green; python -m uvicorn main:app --reload --port 8000"
+    "cd 'D:\cgm butler\minerva'; Write-Host 'Minerva Backend starting...' -ForegroundColor Green; & '$pythonExe' -m uvicorn main:app --reload --port 8000"
 ) -WindowStyle Normal
 
 Start-Sleep -Seconds 2
